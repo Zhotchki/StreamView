@@ -17,7 +17,7 @@ main{max-width:900px;margin:auto;padding:10px}.player{aspect-ratio:16/9;backgrou
 .star{border:0;background:none;color:#fff;font-size:22px}.hidden{display:none}.selected{border-color:#fff}.sport{font-size:11px;color:#c2cad3;margin-top:2px}
 @media(orientation:landscape){main{max-width:none;display:grid;grid-template-columns:1.2fr .8fr;gap:10px}.list{max-height:calc(100dvh - 230px)}}
 </style></head><body>
-<header><div class="brand">StreamView <span class="ver">v1.3.5</span></div><button class="btn" id="settingsBtn">Settings</button></header>
+<header><div class="brand">StreamView <span class="ver">v1.3.6</span></div><button class="btn" id="settingsBtn">Settings</button></header>
 <main><section>
 <div class="player"><video id="video" playsinline controls preload="metadata" x-webkit-airplay="allow"></video></div>
 <div class="now" id="now">Choose a channel</div>
@@ -55,7 +55,7 @@ function teamKeys(team){let a=[];if(!team)return a;for(let k of ['name','shortDi
 function matchupParts(c){let raw=(c.name||'').replace(/\s*-\s*[HA]\s*$/i,'').trim();let p=raw.split(/\s+(?:@|at|vs\.?|v)\s+/i);return p.length===2?p.map(norm):[]}
 function partMatchesTeam(part,team){if(!part)return false;return teamKeys(team).some(k=>part===k||part.endsWith(' '+k)||k.endsWith(' '+part)||part.includes(k))}
 function matchEvent(c,e){let comp=e.competitions?.[0]?.competitors||[];if(comp.length<2)return false;let parts=matchupParts(c);if(parts.length===2){let t0=comp[0].team||{},t1=comp[1].team||{};return (partMatchesTeam(parts[0],t0)&&partMatchesTeam(parts[1],t1))||(partMatchesTeam(parts[0],t1)&&partMatchesTeam(parts[1],t0))}let n=norm(c.name+' '+c.group),hits=0;for(let x of comp){if(teamKeys(x.team).some(k=>n.includes(k)))hits++}return hits>=2}
-function attachTimes(){for(let c of channels){c.game=null;let candidates=scheduleEvents.filter(e=>!c.league||e._league===c.league);let hit=candidates.find(e=>matchEvent(c,e));if(hit)c.game=hit}}
+function attachTimes(){for(let c of channels){c.game=null;let candidates=scheduleEvents.filter(e=>!c.league||e._league===c.league).filter(e=>matchEvent(c,e));if(candidates.length){let now=Date.now();candidates.sort((a,b)=>{let at=new Date(a.date).getTime(),bt=new Date(b.date).getTime();let ap=at>=now?0:1,bp=bt>=now?0:1;return ap-bp||(ap===0?at-bt:bt-at)});c.game=candidates[0]}}}
 function timeLabel(c){let e=c.game;if(!e)return '';let st=e.competitions?.[0]?.status?.type||e.status?.type||{};let state=st.state||'';if(state==='in')return 'LIVE';let d=new Date(e.date);if(isNaN(d))return '';let now=new Date(),today=new Date(now.getFullYear(),now.getMonth(),now.getDate()),day=new Date(d.getFullYear(),d.getMonth(),d.getDate()),diff=Math.round((day-today)/86400000);let prefix=diff===0?'Today':diff===1?'Tomorrow':d.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});return prefix+' • '+d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'})}
 async function loadSchedules(){scheduleEvents=[];let leagues=[...new Set(channels.map(c=>c.league).filter(l=>SCOREBOARDS[l]))];let now=new Date(),to=new Date(now.getTime()+8*86400000);let f=d=>d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0'),range=f(new Date(now.getTime()-86400000))+'-'+f(to);await Promise.all(leagues.map(async l=>{try{let ctl=new AbortController(),tm=setTimeout(()=>ctl.abort(),7000);
 let r=await fetch('/api/schedule?sport='+encodeURIComponent(SCOREBOARDS[l])+'&dates='+encodeURIComponent(range),{cache:'no-store',signal:ctl.signal});
