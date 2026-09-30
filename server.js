@@ -1,0 +1,11 @@
+const http=require('http'),fs=require('fs'),path=require('path');
+const root=__dirname,port=process.env.PORT||10000;
+const sports=new Set(['football/nfl','football/college-football','baseball/mlb','basketball/nba','basketball/mens-college-basketball','hockey/nhl','soccer/usa.1','soccer/eng.1','golf/pga','mma/ufc']);
+const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.webmanifest':'application/manifest+json','.svg':'image/svg+xml','.css':'text/css; charset=utf-8'};
+function send(res,status,body,type='text/plain; charset=utf-8'){res.writeHead(status,{'Content-Type':type,'Cache-Control':'no-store'});res.end(body)}
+http.createServer(async(req,res)=>{try{
+ const u=new URL(req.url,'http://localhost');
+ if(u.pathname==='/api/playlist'){const target=u.searchParams.get('url')||'';let t;try{t=new URL(target)}catch{return send(res,400,'Bad URL')}if(t.protocol!=='https:'||!(t.hostname==='uzzu.tv'||t.hostname.endsWith('.uzzu.tv')))return send(res,403,'Not allowed');const r=await fetch(t,{headers:{'User-Agent':'StreamView/1.3.4'}});return send(res,r.status,await r.text(),r.headers.get('content-type')||'text/plain; charset=utf-8')}
+ if(u.pathname==='/api/schedule'){const sport=u.searchParams.get('sport')||'',dates=u.searchParams.get('dates')||'';if(!sports.has(sport)||!/^\d{8}-\d{8}$/.test(dates))return send(res,400,JSON.stringify({error:'bad request'}),'application/json');const target='https://site.api.espn.com/apis/site/v2/sports/'+sport+'/scoreboard?limit=200&dates='+dates;const r=await fetch(target,{headers:{Accept:'application/json'}});return send(res,r.ok?200:502,await r.text(),'application/json; charset=utf-8')}
+ let p=u.pathname==='/'?'/index.html':u.pathname;p=path.normalize(p).replace(/^(\.\.[/\\])+/, '');const file=path.join(root,p);if(!file.startsWith(root))return send(res,403,'Forbidden');fs.readFile(file,(e,d)=>e?send(res,404,'Not found'):(res.writeHead(200,{'Content-Type':types[path.extname(file)]||'application/octet-stream'}),res.end(d)));
+ }catch(e){send(res,500,'Server error')}}).listen(port,()=>console.log('StreamView listening on '+port));
