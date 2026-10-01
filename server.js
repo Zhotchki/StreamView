@@ -9,8 +9,8 @@ http.createServer(async(req,res)=>{try{
  if(u.pathname==='/api/epg'){const target=u.searchParams.get('url')||'';let t;try{t=new URL(target)}catch{return send(res,400,'Bad URL')}if(t.protocol!=='https:')return send(res,403,'Not allowed');const proxy='https://dualview-proxy.zhotchki.workers.dev/?url='+encodeURIComponent(t.toString());const r=await fetch(proxy,{headers:{Accept:'application/xml,text/xml,*/*'}});return send(res,r.status,await r.text(),r.headers.get('content-type')||'application/xml; charset=utf-8')}if(u.pathname==='/api/epg-fallback'){
  const sources=['https://iptv-org.github.io/epg/guides/us/tvtv.us.epg.xml','https://iptv-org.github.io/epg/guides/us-mn/tvtv.us.epg.xml','https://iptv-org.github.io/epg/guides/us-wi/tvtv.us.epg.xml'];
  const now=Date.now(),out=[],seen=new Set();
- const decode=x=>String(x||'').replace(/<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>/g,'$1').replace(/&amp;/g,'&').replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&lt;/g,'<').replace(/&gt;/g,'>');
- const parseTs=x=>{const m=String(x||'').trim().match(/^(\\d{8})(\\d{6})\\s*([+-]\\d{4})?$/);if(!m)return NaN;const o=m[3]||'+0000';return new Date(m[1].slice(0,4)+'-'+m[1].slice(4,6)+'-'+m[1].slice(6,8)+'T'+m[2].slice(0,2)+':'+m[2].slice(2,4)+':'+m[2].slice(4,6)+o.slice(0,3)+':'+o.slice(3)).getTime()};
+ const decode=x=>String(x||'').replace(/&amp;/g,'&').replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&lt;/g,'<').replace(/&gt;/g,'>');
+ const parseTs=x=>{const m=String(x||'').trim().match(/^(\d{8})(\d{6})\s*([+-]\d{4})?$/);if(!m)return NaN;const o=m[3]||'+0000';return new Date(m[1].slice(0,4)+'-'+m[1].slice(4,6)+'-'+m[1].slice(6,8)+'T'+m[2].slice(0,2)+':'+m[2].slice(2,4)+':'+m[2].slice(4,6)+o.slice(0,3)+':'+o.slice(3)).getTime()};
  const strip=x=>decode(x).replace(/<[^>]*>/g,'').trim();
  let goodSources=0;
  for(const src of sources){
@@ -22,20 +22,20 @@ http.createServer(async(req,res)=>{try{
    for await(const chunk of r.body){
     carry+=Buffer.from(chunk).toString('utf8');
     if(carry.length>2000000)carry=carry.slice(-1000000);
-    let cut=carry.lastIndexOf('</programme>');
+    const cut=carry.lastIndexOf('</programme>');
     if(cut<0)continue;
     const part=carry.slice(0,cut+12);
     carry=carry.slice(cut+12);
-    for(const m of part.matchAll(/<channel\\b([^>]*)>([\\s\\S]*?)<\\/channel>/gi)){
-     const a=m[1]||'',id=(a.match(/\\bid\\s*=\\s*["']([^"']+)["']/i)||[])[1];
-     if(id){const names=[...m[2].matchAll(/<display-name\\b[^>]*>([\\s\\S]*?)<\\/display-name>/gi)].map(x=>strip(x[1])).filter(Boolean);channelsById.set(id,{id,names})}
+    for(const m of part.matchAll(/<channel\b([^>]*)>([\s\S]*?)<\/channel>/gi)){
+     const a=m[1]||'',id=(a.match(/\bid\s*=\s*["']([^"']+)["']/i)||[])[1];
+     if(id){const names=[...m[2].matchAll(/<display-name\b[^>]*>([\s\S]*?)<\/display-name>/gi)].map(x=>strip(x[1])).filter(Boolean);channelsById.set(id,{id,names})}
     }
-    for(const m of part.matchAll(/<programme\\b([^>]*)>([\\s\\S]*?)<\\/programme>/gi)){
-     const a=m[1]||'',body=m[2]||'',channel=(a.match(/\\bchannel\\s*=\\s*["']([^"']+)["']/i)||[])[1],st=(a.match(/\\bstart\\s*=\\s*["']([^"']+)["']/i)||[])[1],sp=(a.match(/\\bstop\\s*=\\s*["']([^"']+)["']/i)||[])[1];
+    for(const m of part.matchAll(/<programme\b([^>]*)>([\s\S]*?)<\/programme>/gi)){
+     const a=m[1]||'',body=m[2]||'',channel=(a.match(/\bchannel\s*=\s*["']([^"']+)["']/i)||[])[1],st=(a.match(/\bstart\s*=\s*["']([^"']+)["']/i)||[])[1],sp=(a.match(/\bstop\s*=\s*["']([^"']+)["']/i)||[])[1];
      if(!channel||!st||!sp)continue;
      const a1=parseTs(st),a2=parseTs(sp);
      if(!(a1<=now&&now<a2))continue;
-     const title=strip((body.match(/<title\\b[^>]*>([\\s\\S]*?)<\\/title>/i)||[])[1]||'');
+     const title=strip((body.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)||[])[1]||'');
      if(!title)continue;
      const name=channelsById.get(channel)?.names?.[0]||channel,key=channel+'|'+title;
      if(!seen.has(key)){seen.add(key);out.push({id:channel,name,title})}
