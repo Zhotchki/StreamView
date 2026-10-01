@@ -17,7 +17,7 @@ main{max-width:900px;margin:auto;padding:10px}.player{aspect-ratio:16/9;backgrou
 .star{border:0;background:none;color:#fff;font-size:22px}.hidden{display:none}.selected{border-color:#fff}.sport{font-size:11px;color:#c2cad3;margin-top:2px}.nowplaying{font-size:13px;color:#e8edf2;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.nowplaying.liveNow{font-weight:800}
 @media(orientation:landscape){main{max-width:none;display:grid;grid-template-columns:1.2fr .8fr;gap:10px}.list{max-height:calc(100dvh - 230px)}}
 </style></head><body>
-<header><div class="brand">StreamView <span class="ver">v1.4.7</span></div><button class="btn" id="settingsBtn">Settings</button></header>
+<header><div class="brand">StreamView <span class="ver">v1.4.8</span></div><button class="btn" id="settingsBtn">Settings</button></header>
 <main><section>
 <div class="player"><video id="video" playsinline controls preload="metadata" x-webkit-airplay="allow"></video></div>
 <div class="now" id="now">Choose a channel</div>
@@ -64,35 +64,14 @@ let epgSource='';function parse(t){let out=[],m=null;let h=t.match(/^#EXTM3U[^\n
 async function loadEpg(url){let r=await fetch('/api/epg?url='+encodeURIComponent(url),{cache:'no-store'});if(!r.ok)throw Error('EPG '+r.status);let xml=await r.text(),doc=new DOMParser().parseFromString(xml,'text/xml');if(doc.querySelector('parsererror'))throw Error('Invalid EPG');let programs=[...doc.querySelectorAll('programme')],now=Date.now(),byId=new Map();for(let p of programs){let id=p.getAttribute('channel')||'',start=new Date(p.getAttribute('start')||''),stop=new Date(p.getAttribute('stop')||'');if(!id||isNaN(start)||isNaN(stop)||stop.getTime()<now||start.getTime()>now)continue;let title=p.querySelector('title')?.textContent?.trim()||'';if(title)byId.set(id,{title,start,stop})}for(let ch of channels){let prog=byId.get(ch.tvgId||'');if(!prog&&ch.tvgName){let n=ch.tvgName.toLowerCase(),entry=[...doc.querySelectorAll('channel')].find(x=>[...x.querySelectorAll('display-name')].some(y=>(y.textContent||'').trim().toLowerCase()===n));if(entry)prog=byId.get(entry.getAttribute('id')||'')}if(!prog){let n=ch.name.toLowerCase(),entry=[...doc.querySelectorAll('channel')].find(x=>[...x.querySelectorAll('display-name')].some(y=>{let z=(y.textContent||'').trim().toLowerCase();return z===n||n.includes(z)||z.includes(n)}));if(entry)prog=byId.get(entry.getAttribute('id')||'')}if(prog)ch.epgNow=prog}render();status.textContent='EPG loaded. Current programs updated.'}
 async function loadFallbackEpg(){try{let r=await fetch('/api/epg-fallback',{cache:'no-store'});if(!r.ok)return;let j=await r.json(),rows=j.channels||[],matched=0;
 const canon=x=>norm(x).replace(/\b(hd|sd|channel|network|tv|east|west|usa|us)\b/g,' ').replace(/\s+/g,' ').trim();
-const aliasMap={
-'pac 12':['pac 12','pac12','pac-12'],
-'nfl':['nfl network'],
-'nfl red zone':['nfl redzone','red zone','redzone'],
-'sec':['sec network'],
-'acc':['acc network'],
-'big ten':['big ten network','btn'],
-'cbs sports':['cbs sports network','cbssn'],
-'espnu':['espnu'],
-'mlb':['mlb network'],
-'nhl':['nhl network'],
-'nba':['nba tv'],
-'golf':['golf channel'],
-'fs1':['fox sports 1','fs1'],
-'fs2':['fox sports 2','fs2'],
-'espn':['espn'],
-'espn2':['espn2'],
-'tnt':['tnt'],
-'tbs':['tbs'],
-'usa':['usa network'],
-'nbc':['nbc'],
-'cbs':['cbs'],
-'fox':['fox']
-};
-for(let ch of channels){if(ch.epgNow)continue;let raw=[ch.tvgId,ch.tvgName,ch.name].filter(Boolean),keys=raw.map(canon),exact=raw.map(norm);
-let hit=rows.find(x=>{let id=norm(x.id||''),nm=norm(x.name||''),cn=canon(x.name||'');return exact.some(k=>k&&(k===id||k===nm))||keys.some(k=>k&&cn&&(k===cn||k.includes(cn)||cn.includes(k)))});
-if(!hit){let ck=canon(ch.name||'');for(const [a,vals] of Object.entries(aliasMap)){if(ck===a||ck.includes(a)||a.includes(ck)){hit=rows.find(x=>vals.some(v=>{let n=canon(x.name||''),id=canon(x.id||'');let vv=canon(v);return n===vv||id===vv||n.includes(vv)||vv.includes(n)}));if(hit)break}}}
+const tokens=x=>canon(x).split(/\s+/).filter(v=>v.length>2);
+const aliases={'pac 12':['pac 12','pac12','pac-12'],'nfl':['nfl network'],'nfl red zone':['nfl redzone','red zone','redzone'],'sec':['sec network'],'acc':['acc network'],'big ten':['big ten network','btn'],'cbs sports':['cbs sports network','cbssn'],'espnu':['espnu'],'mlb':['mlb network'],'nhl':['nhl network'],'nba':['nba tv'],'golf':['golf channel'],'fs1':['fox sports 1','fs1'],'fs2':['fox sports 2','fs2'],'espn':['espn'],'espn2':['espn2'],'tnt':['tnt'],'tbs':['tbs'],'usa':['usa network'],'nbc':['nbc'],'cbs':['cbs'],'fox':['fox']};
+for(let ch of channels){if(ch.epgNow)continue;let raw=[ch.tvgId,ch.tvgName,ch.name].filter(Boolean),keys=raw.map(norm),cks=raw.map(canon);
+let hit=rows.find(x=>{let vals=[x.id,x.name].filter(Boolean).map(norm);return keys.some(k=>k&&vals.some(v=>v===k))||cks.some(k=>k&&vals.some(v=>v===k||v.includes(k)||k.includes(v)))});
+if(!hit){let ck=canon(ch.name||'');for(const [a,vals] of Object.entries(aliases)){if(ck===a||ck.includes(a)||a.includes(ck)){hit=rows.find(x=>vals.some(v=>{let n=canon(x.name||''),id=canon(x.id||''),vv=canon(v);return n===vv||id===vv||n.includes(vv)||vv.includes(n)}));if(hit)break}}}
+if(!hit){let ct=tokens(ch.name||'').filter(x=>!['live','channels','channel'].includes(x));let best=null,bestScore=0;for(const x of rows){let rt=tokens((x.name||'')+' '+(x.id||''));let score=ct.filter(t=>rt.includes(t)).length;let ratio=ct.length?score/ct.length:0;if(score>=2&&ratio>=0.5&&score>bestScore){best=x;bestScore=score}}if(best)hit=best}
 if(hit&&hit.title){ch.epgNow={title:hit.title};matched++}}
-render();status.textContent='EPG loaded • '+matched+' current programs matched.'+(j.sources?' • '+j.sources+' guide source(s)':'')}catch(e){console.warn('Fallback EPG unavailable',e)}}
+render();let unmatched=channels.filter(c=>!c.epgNow&&(c.group||'').toLowerCase().includes('live channel')).length;status.textContent='EPG loaded • '+matched+' current programs matched • '+unmatched+' live channels still unmatched.'+(j.sources?' • '+j.sources+' guide source(s)':'')}catch(e){console.warn('Fallback EPG unavailable',e)}}
 function addRecent(c){recent=[c.url,...recent.filter(x=>x!==c.url)].slice(0,15);localStorage.setItem('sv_recent',JSON.stringify(recent))}
 function fillSelect(el,label,vals){let cur=el.value;el.innerHTML='<option value="">'+label+'</option>';for(let x of vals){let o=document.createElement('option');o.value=x;o.textContent=x;el.appendChild(o)}if(vals.includes(cur))el.value=cur}
 function buildSports(){fillSelect(sport,'All sports',[...new Set(channels.map(c=>c.sport))].sort());buildLeagues()}
