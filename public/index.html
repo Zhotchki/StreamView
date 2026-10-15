@@ -17,7 +17,7 @@ main{max-width:900px;margin:auto;padding:10px}.player{aspect-ratio:16/9;backgrou
 .star{border:0;background:none;color:#fff;font-size:22px}.hidden{display:none}.selected{border-color:#fff}.sport{font-size:11px;color:#c2cad3;margin-top:2px}
 @media(orientation:landscape){main{max-width:none;display:grid;grid-template-columns:1.2fr .8fr;gap:10px}.list{max-height:calc(100dvh - 230px)}}
 </style></head><body>
-<header><div class="brand">StreamView <span class="ver">v1.3.3</span></div><button class="btn" id="settingsBtn">Settings</button></header>
+<header><div class="brand">StreamView <span class="ver">v1.3.4</span></div><button class="btn" id="settingsBtn">Settings</button></header>
 <main><section>
 <div class="player"><video id="video" playsinline controls preload="metadata" x-webkit-airplay="allow"></video></div>
 <div class="now" id="now">Choose a channel</div>
@@ -35,31 +35,79 @@ let channels=[],selected=null,tab='all',scheduleEvents=[];const video=$('#video'
 let fav=new Set(JSON.parse(localStorage.getItem('sv_fav')||'[]')),recent=JSON.parse(localStorage.getItem('sv_recent')||'[]');
 
 function safe(x){try{let u=new URL(x);return /^https?:$/.test(u.protocol)?u.toString():''}catch{return''}}
+const TEAM_HINTS={
+ NFL:'cardinals falcons ravens bills panthers bears bengals browns cowboys broncos lions packers texans colts jaguars chiefs raiders chargers rams dolphins vikings patriots saints giants jets eagles steelers 49ers seahawks buccaneers titans commanders',
+ MLB:'diamondbacks braves orioles red sox cubs white sox reds guardians rockies tigers astros royals angels dodgers marlins brewers twins mets yankees athletics phillies pirates padres giants mariners cardinals rays rangers blue jays nationals',
+ NHL:'ducks bruins sabres flames hurricanes blackhawks avalanche blue jackets stars red wings oilers panthers kings wild canadiens predators devils islanders rangers senators flyers penguins sharks kraken blues lightning maple leafs canucks golden knights capitals jets',
+ NBA:'hawks celtics nets hornets bulls cavaliers mavericks nuggets pistons warriors rockets pacers clippers lakers grizzlies heat bucks timberwolves pelicans knicks thunder magic 76ers suns trail blazers kings spurs raptors jazz wizards'
+};
+const TEAM_PHRASES={
+ NFL:['49ers','new york giants','new york jets','green bay packers','kansas city chiefs','san francisco 49ers','tampa bay buccaneers','washington commanders'],
+ MLB:['red sox','white sox','blue jays','diamondbacks','guardians','brewers','yankees','mets','phillies','dodgers'],
+ NHL:['maple leafs','golden knights','blue jackets','red wings','new york rangers','new york islanders','new jersey devils','tampa bay lightning','seattle kraken'],
+ NBA:['trail blazers','76ers','timberwolves','cavaliers','knicks','mavericks','warriors']
+};
+const TEAM_WORDS=Object.fromEntries(Object.entries(TEAM_HINTS).map(([league,str])=>[league,str.split(/\\s+/)]));
+function teamEvidence(name,league){const n=' '+(name||'').toLowerCase().replace(/[^a-z0-9]+/g,' ')+' ';const phrases=(TEAM_PHRASES[league]||[]).filter(t=>n.includes(' '+t+' '));const words=TEAM_WORDS[league].filter(w=>n.includes(' '+w+' '));return new Set([...phrases,...words]).size}
 function classify(c){
- const x=(c.group+' '+c.name).toLowerCase();
- const rules=[
- ['Football','NFL',/\bnfl\b|redzone|red zone/],['Football','NCAA Football',/\bcfb\b|college football|ncaa football/],
- ['Baseball','MLB',/\bmlb\b|baseball/],['Basketball','NBA',/\bnba\b/],['Basketball','NCAA Basketball',/\bncaab\b|college basketball/],
- ['Hockey','NHL',/\bnhl\b|hockey/],['Golf','PGA / Golf',/\bpga\b|golf|liv golf/],['MMA','UFC / MMA',/\bufc\b|\bmma\b/],
- ['Soccer','MLS',/\bmls\b/],['Soccer','Premier League',/premier league|\bepl\b/],['Soccer','Champions League',/champions league/],
- ['Soccer','Soccer',/soccer|fifa|la liga|serie a|bundesliga/],['Tennis','Tennis',/tennis|\batp\b|\bwta\b/],
- ['Racing','NASCAR',/\bnascar\b/],['Racing','Formula 1',/formula 1|\bf1\b/],['Racing','Racing',/indycar|racing/]];
- for(const [sport,league,re] of rules)if(re.test(x))return {sport,league};
+ const x=(c.group+' '+c.name).toLowerCase(),group=(c.group||'').toLowerCase(),name=c.name||'';
+ const explicit=[
+ ['Football','NFL',/\\bnfl\\b|redzone|red zone/],
+ ['Football','NCAA Football',/\\bcfb\\b|college football|ncaa football/],
+ ['Baseball','MLB',/\\bmlb\\b|baseball/],
+ ['Basketball','NBA',/\\bnba\\b/],
+ ['Basketball','NCAA Basketball',/\\bncaab\\b|college basketball/],
+ ['Hockey','NHL',/\\bnhl\\b|hockey/],
+ ['Golf','PGA / Golf',/\\bpga\\b|golf|liv golf/],
+ ['MMA','UFC / MMA',/\\bufc\\b|\\bmma\\b/],
+ ['Soccer','MLS',/\\bmls\\b/],
+ ['Soccer','Premier League',/premier league|\\bepl\\b/],
+ ['Soccer','Champions League',/champions league/],
+ ['Soccer','Soccer',/soccer|fifa|la liga|serie a|bundesliga/],
+ ['Tennis','Tennis',/tennis|\\batp\\b|\\bwta\\b/],
+ ['Racing','NASCAR',/\\bnascar\\b/],
+ ['Racing','Formula 1',/formula 1|\\bf1\\b/],
+ ['Racing','Racing',/indycar|racing/]
+ ];
+ for(const [sport,league,re] of explicit)if(re.test(x))return {sport,league};
+ if(/live[ -]?games?|live[ -]?sports?/i.test(group)){
+  const scores=['NFL','MLB','NHL','NBA'].map(l=>({league:l,count:teamEvidence(name,l)})).sort((a,b)=>b.count-a.count);
+  if(scores[0].count>=2&&scores[0].count>scores[1].count){const league=scores[0].league;return {sport:{NFL:'Football',MLB:'Baseball',NHL:'Hockey',NBA:'Basketball'}[league],league}}
+  if(scores[0].count===1&&scores[1].count===0){const league=scores[0].league;return {sport:{NFL:'Football',MLB:'Baseball',NHL:'Hockey',NBA:'Basketball'}[league],league}}
+ }
  return {sport:(c.group.trim()||'Other'),league:(c.group.trim()||'Other')};
 }
 const SCOREBOARDS={
  'NFL':'football/nfl','NCAA Football':'football/college-football','MLB':'baseball/mlb','NBA':'basketball/nba','NCAA Basketball':'basketball/mens-college-basketball','NHL':'hockey/nhl','MLS':'soccer/usa.1','Premier League':'soccer/eng.1','PGA / Golf':'golf/pga','UFC / MMA':'mma/ufc'
 };
 function norm(x){return (x||'').toLowerCase().replace(/\s*-\s*[ha]\s*$/i,'').replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim()}
-function teamKeys(team){let a=[];if(!team)return a;for(let k of ['name','shortDisplayName','displayName','abbreviation','location'])if(team[k])a.push(norm(team[k]));return [...new Set(a.filter(k=>k.length>=2))]}
-function matchupParts(c){let raw=(c.name||'').replace(/\s*-\s*[HA]\s*$/i,'').trim();let p=raw.split(/\s+(?:@|at|vs\.?|v)\s+/i);return p.length===2?p.map(norm):[]}
-function partMatchesTeam(part,team){if(!part)return false;return teamKeys(team).some(k=>part===k||part.endsWith(' '+k)||k.endsWith(' '+part)||part.includes(k))}
-function matchEvent(c,e){let comp=e.competitions?.[0]?.competitors||[];if(comp.length<2)return false;let parts=matchupParts(c);if(parts.length===2){let t0=comp[0].team||{},t1=comp[1].team||{};return (partMatchesTeam(parts[0],t0)&&partMatchesTeam(parts[1],t1))||(partMatchesTeam(parts[0],t1)&&partMatchesTeam(parts[1],t0))}let n=norm(c.name+' '+c.group),hits=0;for(let x of comp){if(teamKeys(x.team).some(k=>n.includes(k)))hits++}return hits>=2}
-function attachTimes(){for(let c of channels){c.game=null;let candidates=scheduleEvents.filter(e=>!c.league||e._league===c.league);let hit=candidates.find(e=>matchEvent(c,e));if(hit)c.game=hit}}
+function teamKeys(team){let a=[];if(!team)return a;for(let k of ['name','shortDisplayName','displayName','abbreviation','location'])if(team[k])a.push(norm(team[k]));const full=norm(team.displayName||'');if(full){const pieces=full.split(' ');if(pieces.length>1)a.push(pieces[pieces.length-1]);}return [...new Set(a.filter(k=>k.length>=2))]}
+function matchupParts(c){let raw=(c.name||'').replace(/\\s*-\\s*[HA]\\s*$/i,'').trim();let p=raw.split(/\\s+(?:@|at|vs\\.?|v)\\s+/i);return p.length===2?p.map(norm):[]}
+function partMatchesTeam(part,team){if(!part)return false;return teamKeys(team).some(k=>part===k||part.endsWith(' '+k)||k.endsWith(' '+part)||part.includes(' '+k+' ')||k.includes(' '+part+' '))}
+function matchEvent(c,e){let comp=e.competitions?.[0]?.competitors||[];if(comp.length<2)return false;let parts=matchupParts(c);if(parts.length===2){let t0=comp[0].team||{},t1=comp[1].team||{};return (partMatchesTeam(parts[0],t0)&&partMatchesTeam(parts[1],t1))||(partMatchesTeam(parts[0],t1)&&partMatchesTeam(parts[1],t0))}let n=norm(c.name),hits=0;for(let x of comp){if(teamKeys(x.team).some(k=>k.length>=3&&(n===k||n.includes(' '+k+' ')||n.startsWith(k+' ')||n.endsWith(' '+k))))hits++}return hits>=2}
+
+function attachTimes(){for(let c of channels){c.game=null;let candidates=scheduleEvents.filter(e=>e._league===c.league&&matchEvent(c,e));if(candidates.length){let now=Date.now(),rank=e=>{let state=(e.competitions?.[0]?.status?.type||e.status?.type||{}).state||'';return state==='in'?0:new Date(e.date).getTime()>=now?1:2};candidates.sort((a,b)=>{let ar=rank(a),br=rank(b),at=new Date(a.date).getTime(),bt=new Date(b.date).getTime();return ar-br||(ar===1?at-bt:bt-at)});c.game=candidates[0]}}}
+
 function timeLabel(c){let e=c.game;if(!e)return '';let st=e.competitions?.[0]?.status?.type||e.status?.type||{};let state=st.state||'';if(state==='in')return 'LIVE';let d=new Date(e.date);if(isNaN(d))return '';let now=new Date(),today=new Date(now.getFullYear(),now.getMonth(),now.getDate()),day=new Date(d.getFullYear(),d.getMonth(),d.getDate()),diff=Math.round((day-today)/86400000);let prefix=diff===0?'Today':diff===1?'Tomorrow':d.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});return prefix+' • '+d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'})}
-async function loadSchedules(){scheduleEvents=[];let leagues=[...new Set(channels.map(c=>c.league).filter(l=>SCOREBOARDS[l]))];let now=new Date(),to=new Date(now.getTime()+8*86400000);let f=d=>d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0'),range=f(new Date(now.getTime()-86400000))+'-'+f(to);await Promise.all(leagues.map(async l=>{try{let ctl=new AbortController(),tm=setTimeout(()=>ctl.abort(),7000);
-let r=await fetch('/api/schedule?sport='+encodeURIComponent(SCOREBOARDS[l])+'&dates='+encodeURIComponent(range),{cache:'no-store',signal:ctl.signal});
-clearTimeout(tm);if(!r.ok)return;let j=await r.json();for(let e of (j.events||[])){e._league=l;scheduleEvents.push(e)}}catch(e){console.warn('Schedule unavailable',l,e)}}));attachTimes()}
+async function loadSchedules(){
+ scheduleEvents=[];
+ let needsLive=channels.some(c=>/live[ -]?games?/i.test(c.group||''));
+ let core=needsLive?['NFL','MLB','NHL','NBA']:[];
+ let leagues=[...new Set([...core,...channels.map(c=>c.league)].filter(l=>SCOREBOARDS[l]))];
+ let now=new Date(),to=new Date(now.getTime()+8*86400000);
+ let f=d=>d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0'),range=f(new Date(now.getTime()-86400000))+'-'+f(to);
+ const results=await Promise.all(leagues.map(async l=>{let ctl=new AbortController(),tm=setTimeout(()=>ctl.abort(),18000);try{
+  let r=await fetch('/api/schedule?sport='+encodeURIComponent(SCOREBOARDS[l])+'&dates='+encodeURIComponent(range),{cache:'no-store',signal:ctl.signal});
+  if(!r.ok)throw Error('HTTP '+r.status);let j=await r.json();return {league:l,events:j.events||[]};
+ }catch(e){console.warn('Schedule unavailable',l,e);return {league:l,events:[],failed:true}}finally{clearTimeout(tm)}}));
+ for(let result of results)for(let e of result.events){e._league=result.league;scheduleEvents.push(e)}
+ // Unlabeled Live-Games entries can be assigned only when their matchup uniquely matches a scheduled league.
+ for(let c of channels){if(!/live[ -]?games?/i.test(c.group||'')||SCOREBOARDS[c.league])continue;let leaguesMatched=[...new Set(scheduleEvents.filter(e=>matchEvent(c,e)).map(e=>e._league))];if(leaguesMatched.length===1&&['NFL','MLB','NHL','NBA'].includes(leaguesMatched[0])){c.league=leaguesMatched[0];c.sport={NFL:'Football',MLB:'Baseball',NHL:'Hockey',NBA:'Basketball'}[c.league]}}
+ attachTimes();buildSports();render();
+ let failed=results.filter(r=>r.failed).map(r=>r.league);
+ let matched=channels.filter(c=>c.game).length;
+ status.textContent='Loaded '+channels.length+' streams • '+matched+' game times matched'+(failed.length?' • schedule unavailable: '+failed.join(', '):'');
+}
 function parse(t){let out=[],m=null;for(let r of t.replace(/\r/g,'').split('\n')){let l=r.trim();if(!l)continue;if(l.startsWith('#EXTINF:')){let c=l.lastIndexOf(',');m={name:(c>=0?l.slice(c+1):'Channel').trim()||'Channel',group:(l.match(/group-title="([^"]*)"/i)||[])[1]||''}}else if(!l.startsWith('#')&&m){let u=safe(l);if(u){let x={...m,url:u};let cl=classify(x);x.sport=cl.sport;x.league=cl.league;out.push(x)}m=null}}return out}
 function addRecent(c){recent=[c.url,...recent.filter(x=>x!==c.url)].slice(0,15);localStorage.setItem('sv_recent',JSON.stringify(recent))}
 function fillSelect(el,label,vals){let cur=el.value;el.innerHTML='<option value="">'+label+'</option>';for(let x of vals){let o=document.createElement('option');o.value=x;o.textContent=x;el.appendChild(o)}if(vals.includes(cur))el.value=cur}
