@@ -47,26 +47,26 @@ const TEAM_PHRASES={
  NHL:['maple leafs','golden knights','blue jackets','red wings','new york rangers','new york islanders','new jersey devils','tampa bay lightning','seattle kraken'],
  NBA:['trail blazers','76ers','timberwolves','cavaliers','knicks','mavericks','warriors']
 };
-const TEAM_WORDS=Object.fromEntries(Object.entries(TEAM_HINTS).map(([league,str])=>[league,str.split(/\\s+/)]));
+const TEAM_WORDS=Object.fromEntries(Object.entries(TEAM_HINTS).map(([league,str])=>[league,str.split(/\s+/)]));
 function teamEvidence(name,league){const n=' '+(name||'').toLowerCase().replace(/[^a-z0-9]+/g,' ')+' ';const phrases=(TEAM_PHRASES[league]||[]).filter(t=>n.includes(' '+t+' '));const words=TEAM_WORDS[league].filter(w=>n.includes(' '+w+' '));return new Set([...phrases,...words]).size}
 function classify(c){
  const x=(c.group+' '+c.name).toLowerCase(),group=(c.group||'').toLowerCase(),name=c.name||'';
  const explicit=[
- ['Football','NFL',/\\bnfl\\b|redzone|red zone/],
- ['Football','NCAA Football',/\\bcfb\\b|college football|ncaa football/],
- ['Baseball','MLB',/\\bmlb\\b|baseball/],
- ['Basketball','NBA',/\\bnba\\b/],
- ['Basketball','NCAA Basketball',/\\bncaab\\b|college basketball/],
- ['Hockey','NHL',/\\bnhl\\b|hockey/],
- ['Golf','PGA / Golf',/\\bpga\\b|golf|liv golf/],
- ['MMA','UFC / MMA',/\\bufc\\b|\\bmma\\b/],
- ['Soccer','MLS',/\\bmls\\b/],
- ['Soccer','Premier League',/premier league|\\bepl\\b/],
+ ['Football','NFL',/\bnfl\b|redzone|red zone/],
+ ['Football','NCAA Football',/\bcfb\b|college football|ncaa football/],
+ ['Baseball','MLB',/\bmlb\b|baseball/],
+ ['Basketball','NBA',/\bnba\b/],
+ ['Basketball','NCAA Basketball',/\bncaab\b|college basketball/],
+ ['Hockey','NHL',/\bnhl\b|hockey/],
+ ['Golf','PGA / Golf',/\bpga\b|golf|liv golf/],
+ ['MMA','UFC / MMA',/\bufc\b|\bmma\b/],
+ ['Soccer','MLS',/\bmls\b/],
+ ['Soccer','Premier League',/premier league|\bepl\b/],
  ['Soccer','Champions League',/champions league/],
  ['Soccer','Soccer',/soccer|fifa|la liga|serie a|bundesliga/],
- ['Tennis','Tennis',/tennis|\\batp\\b|\\bwta\\b/],
- ['Racing','NASCAR',/\\bnascar\\b/],
- ['Racing','Formula 1',/formula 1|\\bf1\\b/],
+ ['Tennis','Tennis',/tennis|\batp\b|\bwta\b/],
+ ['Racing','NASCAR',/\bnascar\b/],
+ ['Racing','Formula 1',/formula 1|\bf1\b/],
  ['Racing','Racing',/indycar|racing/]
  ];
  for(const [sport,league,re] of explicit)if(re.test(x))return {sport,league};
@@ -82,7 +82,7 @@ const SCOREBOARDS={
 };
 function norm(x){return (x||'').toLowerCase().replace(/\s*-\s*[ha]\s*$/i,'').replace(/[^a-z0-9]+/g,' ').replace(/\s+/g,' ').trim()}
 function teamKeys(team){let a=[];if(!team)return a;for(let k of ['name','shortDisplayName','displayName','abbreviation','location'])if(team[k])a.push(norm(team[k]));const full=norm(team.displayName||'');if(full){const pieces=full.split(' ');if(pieces.length>1)a.push(pieces[pieces.length-1]);}return [...new Set(a.filter(k=>k.length>=2))]}
-function matchupParts(c){let raw=(c.name||'').replace(/\\s*-\\s*[HA]\\s*$/i,'').trim();let p=raw.split(/\\s+(?:@|at|vs\\.?|v)\\s+/i);return p.length===2?p.map(norm):[]}
+function matchupParts(c){let raw=(c.name||'').replace(/\s*-\s*[HA]\s*$/i,'').trim();let p=raw.split(/\s+(?:@|at|vs\.?|v)\s+/i);return p.length===2?p.map(norm):[]}
 function partMatchesTeam(part,team){if(!part)return false;return teamKeys(team).some(k=>part===k||part.endsWith(' '+k)||k.endsWith(' '+part)||part.includes(' '+k+' ')||k.includes(' '+part+' '))}
 function matchEvent(c,e){let comp=e.competitions?.[0]?.competitors||[];if(comp.length<2)return false;let parts=matchupParts(c);if(parts.length===2){let t0=comp[0].team||{},t1=comp[1].team||{};return (partMatchesTeam(parts[0],t0)&&partMatchesTeam(parts[1],t1))||(partMatchesTeam(parts[0],t1)&&partMatchesTeam(parts[1],t0))}let n=norm(c.name),hits=0;for(let x of comp){if(teamKeys(x.team).some(k=>k.length>=3&&(n===k||n.includes(' '+k+' ')||n.startsWith(k+' ')||n.endsWith(' '+k))))hits++}return hits>=2}
 
